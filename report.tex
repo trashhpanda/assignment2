@@ -1,0 +1,158 @@
+\documentclass[12pt, a4paper]{article}\usepackage[]{graphicx}\usepackage[]{xcolor}
+% maxwidth is the original width if it is less than linewidth
+% otherwise use linewidth (to make sure the graphics do not exceed the margin)
+\makeatletter
+\def\maxwidth{ %
+  \ifdim\Gin@nat@width>\linewidth
+    \linewidth
+  \else
+    \Gin@nat@width
+  \fi
+}
+\makeatother
+
+\definecolor{fgcolor}{rgb}{0.345, 0.345, 0.345}
+\newcommand{\hlnum}[1]{\textcolor[rgb]{0.686,0.059,0.569}{#1}}%
+\newcommand{\hlsng}[1]{\textcolor[rgb]{0.192,0.494,0.8}{#1}}%
+\newcommand{\hlcom}[1]{\textcolor[rgb]{0.678,0.584,0.686}{\textit{#1}}}%
+\newcommand{\hlopt}[1]{\textcolor[rgb]{0,0,0}{#1}}%
+\newcommand{\hldef}[1]{\textcolor[rgb]{0.345,0.345,0.345}{#1}}%
+\newcommand{\hlkwa}[1]{\textcolor[rgb]{0.161,0.373,0.58}{\textbf{#1}}}%
+\newcommand{\hlkwb}[1]{\textcolor[rgb]{0.69,0.353,0.396}{#1}}%
+\newcommand{\hlkwc}[1]{\textcolor[rgb]{0.333,0.667,0.333}{#1}}%
+\newcommand{\hlkwd}[1]{\textcolor[rgb]{0.737,0.353,0.396}{\textbf{#1}}}%
+\let\hlipl\hlkwb
+
+\usepackage{framed}
+\makeatletter
+\newenvironment{kframe}{%
+ \def\at@end@of@kframe{}%
+ \ifinner\ifhmode%
+  \def\at@end@of@kframe{\end{minipage}}%
+  \begin{minipage}{\columnwidth}%
+ \fi\fi%
+ \def\FrameCommand##1{\hskip\@totalleftmargin \hskip-\fboxsep
+ \colorbox{shadecolor}{##1}\hskip-\fboxsep
+     % There is no \\@totalrightmargin, so:
+     \hskip-\linewidth \hskip-\@totalleftmargin \hskip\columnwidth}%
+ \MakeFramed {\advance\hsize-\width
+   \@totalleftmargin\z@ \linewidth\hsize
+   \@setminipage}}%
+ {\par\unskip\endMakeFramed%
+ \at@end@of@kframe}
+\makeatother
+
+\definecolor{shadecolor}{rgb}{.97, .97, .97}
+\definecolor{messagecolor}{rgb}{0, 0, 0}
+\definecolor{warningcolor}{rgb}{1, 0, 1}
+\definecolor{errorcolor}{rgb}{1, 0, 0}
+\newenvironment{knitrout}{}{} % an empty environment to be redefined in TeX
+
+\usepackage{alltt}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% additional LaTeX packages
+% \usepackage[OT4]{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref}
+\usepackage{anyfontsize}
+\usepackage{bbm}
+\usepackage{amsmath}
+% \usepackage{Sweave}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% global settings
+
+
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\begin{document}
+% \SweaveOpts{concordance=TRUE}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\title{Advanced Applications of Statistical Packages\\
+Report 2}
+\author{Dawid Rurzyński, Samanta Szenajch}
+\maketitle
+%\newpage
+
+\tableofcontents 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{Task 1: Monte Carlo simulations comparing bootstrap with ML
+estimator of the parameter $\theta$}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+For the first task, we ran the code in a separate file, saving the dataframes with output as \texttt{.rds} files for later use in the report, as the entire simulation takes almost an hour to run which makes writing the code in chunks and executing while rendering the report very impractical.
+
+The code below is the initial setup for the rest of the task, setting the random seed for reproducibility purposes, specifying the number of Monte Carlo iterations (\texttt{MC}), number of iterations for the Bootstrap algorithm (\texttt{BS}), a vector of sample sizes for which to perform the simulation (\texttt{N}) and a matrix (\texttt{theta\_true}) specifying values of the parameter $\theta = (\alpha, \beta)$ used for generating samples from the Gamma distribution $\mathcal{G}(\alpha, \beta)$.
+
+\begin{knitrout}
+\definecolor{shadecolor}{rgb}{0.969, 0.969, 0.969}\color{fgcolor}\begin{kframe}
+\begin{alltt}
+\hlcom{############################### setup ###############################}
+
+\hlcom{# set random seed}
+\hlkwd{set.seed}\hldef{(}\hlnum{42}\hldef{)}
+
+\hlcom{# number of MC iterations}
+\hldef{MC} \hlkwb{<-} \hlnum{1000}
+
+\hlcom{# number of bootstrap iterations}
+\hldef{BS} \hlkwb{<-} \hlnum{10000}
+
+\hlcom{# sample sizes}
+\hldef{N} \hlkwb{<-} \hlkwd{c}\hldef{(}\hlnum{20}\hldef{,} \hlnum{50}\hldef{,} \hlnum{200}\hldef{)}
+
+\hlcom{# true parameter values for the Gamma distribution}
+\hldef{theta_true} \hlkwb{<-} \hlkwd{matrix}\hldef{(}
+  \hlkwd{c}\hldef{(}\hlnum{0.5}\hldef{,} \hlnum{1}\hldef{,}
+    \hlnum{10}\hldef{,} \hlnum{1}\hldef{,}
+    \hlnum{10}\hldef{,} \hlnum{3}\hldef{),}
+  \hlkwc{ncol} \hldef{=} \hlnum{2}\hldef{,}
+  \hlkwc{byrow} \hldef{=} \hlnum{TRUE}
+\hldef{)}
+\end{alltt}
+\end{kframe}
+\end{knitrout}
+
+\subsection{Sample sizes}
+The article on Wikipedia \footnotemark{} claims (with sources) that Bootstrap should work well for sample sizes as small as 50, while larger than 100 don't offer significant improvements. Thus we selected $n = 50$ as a "good" sample size, a small sample of $n = 20$ observations and a large sample with $n = 200$.
+
+
+\footnotetext{\protect\url{https://en.wikipedia.org/wiki/Bootstrapping_(statistics)\#Recommendations}\label{foot:wiki_bootstrap}}
+
+
+\subsection{Parametrization and choice of "true" $\theta$ values}
+
+The same Wikipedia article\footref{foot:wiki_bootstrap} points out that Bootstrap may give misleading results in the case of heavy-tailed distributions. Thus we chose the first set of parameters $\theta = (0.5, 1)$ to represent strong skewness (heavy left tail) without much dispersion. Then we proceed to a "better behaved" distribution with $\theta = (10, 1)$ which looks almost normal. For the last set of parameters we increase dispersion with $\theta = (10, 3)$.
+
+Figure ~\ref{fig:DrawGamma} presents the shapes of three distributions generated with our chosen parameters, from which we will draw samples for the experiment.
+
+\begin{knitrout}
+\definecolor{shadecolor}{rgb}{0.969, 0.969, 0.969}\color{fgcolor}\begin{figure}[H]
+
+{\centering \includegraphics[width=0.9\textwidth]{figure/DrawGamma-1} 
+
+}
+
+\caption[Gamma distribution with different values of shape and scale parameters $\theta = (\alpha, \beta)$]{Gamma distribution with different values of shape and scale parameters $\theta = (\alpha, \beta)$}\label{fig:DrawGamma}
+\end{figure}
+
+\end{knitrout}
+
+We note that the function \texttt{rgamma()} in R\footnote{\protect\url{https://www.rdocumentation.org/packages/Rlab/versions/4.5.1/topics/Gamma}\label{foot:rgamma_doc}} (we use it later to generate samples) uses \texttt{beta} interchangeably with \texttt{scale}, while the Wikipedia article about the Gamma distribution\footnote{\protect\url{https://en.wikipedia.org/wiki/Gamma_distribution}\label{foot:wiki_gamma}} denotes $\beta$ for the rate parameter which is $1/scale$, while the assignment description doesn't specify which one to use. Across this report we will use the shape-scale parametrization with the convention as in the \texttt{rgamma()} function syntax -- so we denote the shape parameter as $\alpha$ and scale parameter as $\beta$.
+
+
+
+\subsection{Maximum likelihood estimator}
+
+
+\end{document}
+
+
+

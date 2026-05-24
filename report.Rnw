@@ -1,0 +1,139 @@
+\documentclass[12pt, a4paper]{article}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% additional LaTeX packages
+% \usepackage[OT4]{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref}
+\usepackage{anyfontsize}
+\usepackage{bbm}
+\usepackage{amsmath}
+% \usepackage{Sweave}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% global settings
+<<GlobalSettings, echo=FALSE>>=
+library(knitr)
+library(latex2exp)
+library(ggplot2)
+library(vctrs)
+library(xtable) # package for tables in LaTeX format
+opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=4, fig.height=3)
+# Remark: each settings can be individually set in each chunk 
+@
+
+\begin{document}
+% \SweaveOpts{concordance=TRUE}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\title{Advanced Applications of Statistical Packages\\
+Report 2}
+\author{Dawid Rurzyński, Samanta Szenajch}
+\maketitle
+%\newpage
+
+\tableofcontents 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{Task 1: Monte Carlo simulations comparing bootstrap with ML
+estimator of the parameter $\theta$}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+For the first task, we ran the code in a separate file, saving the dataframes with output as \texttt{.rds} files for later use in the report, as the entire simulation takes almost an hour to run which makes writing the code in chunks and executing while rendering the report very impractical.
+
+The code below is the initial setup for the rest of the task, setting the random seed for reproducibility purposes, specifying the number of Monte Carlo iterations (\texttt{MC}), number of iterations for the Bootstrap algorithm (\texttt{BS}), a vector of sample sizes for which to perform the simulation (\texttt{N}) and a matrix (\texttt{theta\_true}) specifying values of the parameter $\theta = (\alpha, \beta)$ used for generating samples from the Gamma distribution $\mathcal{G}(\alpha, \beta)$.
+
+<<Task1Setup, echo=TRUE, eval=FALSE>>=
+############################### setup ###############################
+
+# set random seed
+set.seed(42)
+
+# number of MC iterations
+MC <- 1000
+
+# number of bootstrap iterations
+BS <- 10000
+
+# sample sizes
+N <- c(20, 50, 200)
+
+# true parameter values for the Gamma distribution
+theta_true <- matrix(
+  c(0.5, 1,
+    10, 1,
+    10, 3),
+  ncol = 2,
+  byrow = TRUE
+)
+@
+
+\subsection{Sample sizes}
+The article on Wikipedia \footnotemark{} claims (with sources) that Bootstrap should work well for sample sizes as small as 50, while larger than 100 don't offer significant improvements. Thus we selected $n = 50$ as a "good" sample size, a small sample of $n = 20$ observations and a large sample with $n = 200$.
+
+
+\footnotetext{\protect\url{https://en.wikipedia.org/wiki/Bootstrapping_(statistics)\#Recommendations}\label{foot:wiki_bootstrap}}
+
+
+\subsection{Parametrization and choice of "true" $\theta$ values}
+
+The same Wikipedia article\footref{foot:wiki_bootstrap} points out that Bootstrap may give misleading results in the case of heavy-tailed distributions. Thus we chose the first set of parameters $\theta = (0.5, 1)$ to represent strong skewness (heavy left tail) without much dispersion. Then we proceed to a "better behaved" distribution with $\theta = (10, 1)$ which looks almost normal. For the last set of parameters we increase dispersion with $\theta = (10, 3)$.
+
+Figure ~\ref{fig:DrawGamma} presents the shapes of three distributions generated with our chosen parameters, from which we will draw samples for the experiment.
+
+<<DrawGamma, echo=FALSE, eval=TRUE, fig.cap="Gamma distribution with different values of shape and scale parameters $\\theta = (\\alpha, \\beta)$", out.width="0.9\\textwidth">>=
+
+# x grid
+x <- seq(0, 70, length.out = 1000)
+
+# parameter sets: (shape = alpha, scale = beta)
+params <- list(
+  c(alpha = 0.5, beta = 1),
+  c(alpha = 10, beta = 1),
+  c(alpha = 10, beta = 3)
+)
+
+# colors
+cols <- c("red", "blue", "darkgreen")
+
+# plot empty canvas
+plot(x, dgamma(x, shape = params[[1]]["alpha"], scale = params[[1]]["beta"]),
+     type = "l", lwd = 2, col = cols[1],
+     ylim = c(0, 0.6),
+     xlab = "x", ylab = "Density",
+     main = TeX("Gamma distributions for different $\\alpha$ and $\\beta$"))
+
+# add others
+for (i in 2:length(params)) {
+  lines(x,
+        dgamma(x,
+               shape = params[[i]]["alpha"],
+               scale = params[[i]]["beta"]),
+        col = cols[i], lwd = 2)
+}
+
+legend("topright",
+       legend = c(
+         TeX("$\\alpha=0.5, \\beta=1$"),
+         TeX("$\\alpha=10, \\beta=1$"),
+         TeX("$\\alpha=10, \\beta=3$")
+       ),
+       col = cols, lwd = 2)
+@
+
+We note that the function \texttt{rgamma()} in R\footnote{\protect\url{https://www.rdocumentation.org/packages/Rlab/versions/4.5.1/topics/Gamma}\label{foot:rgamma_doc}} (we use it later to generate samples) uses \texttt{beta} interchangeably with \texttt{scale}, while the Wikipedia article about the Gamma distribution\footnote{\protect\url{https://en.wikipedia.org/wiki/Gamma_distribution}\label{foot:wiki_gamma}} denotes $\beta$ for the rate parameter which is $1/scale$, while the assignment description doesn't specify which one to use. Across this report we will use the shape-scale parametrization with the convention as in the \texttt{rgamma()} function syntax -- so we denote the shape parameter as $\alpha$ and scale parameter as $\beta$.
+
+
+
+\subsection{Maximum likelihood estimator}
+
+
+\end{document}
+
+
+
