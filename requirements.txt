@@ -1,0 +1,9 @@
+renv
+ggplot2
+knitr
+latex2exp
+vctrs
+xtable
+boot
+MASS
+wooldridge

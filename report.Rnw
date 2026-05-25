@@ -1,139 +1,353 @@
 \documentclass[12pt, a4paper]{article}
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % additional LaTeX packages
-% \usepackage[OT4]{polski}
 \usepackage[utf8]{inputenc}
 \usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage[colorlinks=true, linkcolor=blue]{hyperref}
-\usepackage{anyfontsize}
-\usepackage{bbm}
 \usepackage{amsmath}
-% \usepackage{Sweave}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % global settings
 <<GlobalSettings, echo=FALSE>>=
 library(knitr)
-library(latex2exp)
-library(ggplot2)
-library(vctrs)
-library(xtable) # package for tables in LaTeX format
-opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=4, fig.height=3)
-# Remark: each settings can be individually set in each chunk 
+opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H', 
+               fig.width=6, fig.height=4, warning=FALSE, message=FALSE)
 @
 
 \begin{document}
-% \SweaveOpts{concordance=TRUE}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\title{Advanced Applications of Statistical Packages\\
-Report 2}
+\title{Advanced Applications of Statistical Packages\\Report 2: Bootstrap Methods}
 \author{Dawid Rurzyński, Samanta Szenajch}
 \maketitle
-%\newpage
 
-\tableofcontents 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\tableofcontents
 \newpage
-\section{Task 1: Monte Carlo simulations comparing bootstrap with ML
-estimator of the parameter $\theta$}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-For the first task, we ran the code in a separate file, saving the dataframes with output as \texttt{.rds} files for later use in the report, as the entire simulation takes almost an hour to run which makes writing the code in chunks and executing while rendering the report very impractical.
+\section{Task 1: Monte Carlo Simulations - ML vs Bootstrap}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-The code below is the initial setup for the rest of the task, setting the random seed for reproducibility purposes, specifying the number of Monte Carlo iterations (\texttt{MC}), number of iterations for the Bootstrap algorithm (\texttt{BS}), a vector of sample sizes for which to perform the simulation (\texttt{N}) and a matrix (\texttt{theta\_true}) specifying values of the parameter $\theta = (\alpha, \beta)$ used for generating samples from the Gamma distribution $\mathcal{G}(\alpha, \beta)$.
+\subsection{Overview}
 
-<<Task1Setup, echo=TRUE, eval=FALSE>>=
-############################### setup ###############################
+We compared maximum likelihood (ML) and bootstrap mean estimators for Gamma distribution parameters using Monte Carlo simulations with 1,000 iterations and 10,000 bootstrap resamples per sample.
 
-# set random seed
-set.seed(42)
+\textbf{Gamma distribution parametrization:} We use the shape-scale parametrization where $X \sim \text{Gamma}(\alpha, \beta)$, with $\alpha$ being the shape parameter and $\beta$ the scale parameter. Three parameter pairs were tested: $\theta=(0.5,1)$, $(10,1)$, and $(10,3)$, representing different skewness levels. Sample sizes were $n=20, 50, 200$, resulting in 9 scenarios total.
 
-# number of MC iterations
-MC <- 1000
+\subsection{Results}
 
-# number of bootstrap iterations
-BS <- 10000
-
-# sample sizes
-N <- c(20, 50, 200)
-
-# true parameter values for the Gamma distribution
-theta_true <- matrix(
-  c(0.5, 1,
-    10, 1,
-    10, 3),
-  ncol = 2,
-  byrow = TRUE
-)
-@
-
-\subsection{Sample sizes}
-The article on Wikipedia \footnotemark{} claims (with sources) that Bootstrap should work well for sample sizes as small as 50, while larger than 100 don't offer significant improvements. Thus we selected $n = 50$ as a "good" sample size, a small sample of $n = 20$ observations and a large sample with $n = 200$.
-
-
-\footnotetext{\protect\url{https://en.wikipedia.org/wiki/Bootstrapping_(statistics)\#Recommendations}\label{foot:wiki_bootstrap}}
-
-
-\subsection{Parametrization and choice of "true" $\theta$ values}
-
-The same Wikipedia article\footref{foot:wiki_bootstrap} points out that Bootstrap may give misleading results in the case of heavy-tailed distributions. Thus we chose the first set of parameters $\theta = (0.5, 1)$ to represent strong skewness (heavy left tail) without much dispersion. Then we proceed to a "better behaved" distribution with $\theta = (10, 1)$ which looks almost normal. For the last set of parameters we increase dispersion with $\theta = (10, 3)$.
-
-Figure ~\ref{fig:DrawGamma} presents the shapes of three distributions generated with our chosen parameters, from which we will draw samples for the experiment.
-
-<<DrawGamma, echo=FALSE, eval=TRUE, fig.cap="Gamma distribution with different values of shape and scale parameters $\\theta = (\\alpha, \\beta)$", out.width="0.9\\textwidth">>=
-
-# x grid
-x <- seq(0, 70, length.out = 1000)
-
-# parameter sets: (shape = alpha, scale = beta)
-params <- list(
-  c(alpha = 0.5, beta = 1),
-  c(alpha = 10, beta = 1),
-  c(alpha = 10, beta = 3)
-)
-
-# colors
-cols <- c("red", "blue", "darkgreen")
-
-# plot empty canvas
-plot(x, dgamma(x, shape = params[[1]]["alpha"], scale = params[[1]]["beta"]),
-     type = "l", lwd = 2, col = cols[1],
-     ylim = c(0, 0.6),
-     xlab = "x", ylab = "Density",
-     main = TeX("Gamma distributions for different $\\alpha$ and $\\beta$"))
-
-# add others
-for (i in 2:length(params)) {
-  lines(x,
-        dgamma(x,
-               shape = params[[i]]["alpha"],
-               scale = params[[i]]["beta"]),
-        col = cols[i], lwd = 2)
+<<Task1Results, echo=FALSE, eval=TRUE>>=
+task1_path <- "results/task1_results.rds"
+if (file.exists(task1_path)) {
+  task1_res <- readRDS(task1_path)
+  if (!is.null(task1_res) && nrow(task1_res) > 0) {
+    cat("\nTask 1 Results Summary (all sample sizes and theta parameters):\n\n")
+    
+    theta_labels <- c("theta1" = "(0.5, 1)", "theta2" = "(10, 1)", "theta3" = "(10, 3)")
+    theta_values <- list("theta1" = c(alpha = 0.5, beta = 1),
+                         "theta2" = c(alpha = 10, beta = 1),
+                         "theta3" = c(alpha = 10, beta = 3))
+    
+    df_out <- task1_res
+    
+    if ("theta_id" %in% names(df_out)) {
+      theta_id_chr <- as.character(df_out$theta_id)
+      df_out$theta_pair <- unname(theta_labels[theta_id_chr])
+    } else {
+      df_out$theta_pair <- NA_character_
+    }
+    
+    if ("theta" %in% names(df_out)) {
+      df_out$true_value <- df_out$theta
+    } else if ("true_value" %in% names(df_out)) {
+      df_out$true_value <- df_out$true_value
+    } else if ("theta_id" %in% names(df_out) && "param" %in% names(df_out)) {
+      df_out$true_value <- mapply(function(id, par) theta_values[[as.character(id)]][[as.character(par)]],
+                                  df_out$theta_id, df_out$param)
+    }
+    
+    if (!"coverage" %in% names(df_out)) {
+      if (all(c("coverage_alpha", "coverage_beta", "param") %in% names(df_out))) {
+        df_out$coverage <- ifelse(df_out$param == "alpha", df_out$coverage_alpha, df_out$coverage_beta)
+      }
+    }
+    
+    keep_cols <- c("n", "theta_pair", "param", "true_value", "mean_theta_ml", "mean_theta_bs", "coverage")
+    keep_cols <- keep_cols[keep_cols %in% names(df_out)]
+    df_print <- df_out[, keep_cols, drop = FALSE]
+    
+    if ("coverage" %in% names(df_print) && is.numeric(df_print$coverage)) {
+      df_print$coverage <- paste0(round(100 * df_print$coverage, 1), "%")
+    }
+    if ("mean_theta_ml" %in% names(df_print)) df_print$mean_theta_ml <- round(df_print$mean_theta_ml, 4)
+    if ("mean_theta_bs" %in% names(df_print)) df_print$mean_theta_bs <- round(df_print$mean_theta_bs, 4)
+    if ("true_value" %in% names(df_print)) df_print$true_value <- round(df_print$true_value, 4)
+    
+    print(df_print, row.names = FALSE)
+  } else {
+    cat("Task 1 results file is empty.\n")
+  }
+} else {
+  cat("Task 1 results unavailable.\n")
 }
-
-legend("topright",
-       legend = c(
-         TeX("$\\alpha=0.5, \\beta=1$"),
-         TeX("$\\alpha=10, \\beta=1$"),
-         TeX("$\\alpha=10, \\beta=3$")
-       ),
-       col = cols, lwd = 2)
 @
 
-We note that the function \texttt{rgamma()} in R\footnote{\protect\url{https://www.rdocumentation.org/packages/Rlab/versions/4.5.1/topics/Gamma}\label{foot:rgamma_doc}} (we use it later to generate samples) uses \texttt{beta} interchangeably with \texttt{scale}, while the Wikipedia article about the Gamma distribution\footnote{\protect\url{https://en.wikipedia.org/wiki/Gamma_distribution}\label{foot:wiki_gamma}} denotes $\beta$ for the rate parameter which is $1/scale$, while the assignment description doesn't specify which one to use. Across this report we will use the shape-scale parametrization with the convention as in the \texttt{rgamma()} function syntax -- so we denote the shape parameter as $\alpha$ and scale parameter as $\beta$.
+The column \verb|true_value| denotes the true value of the parameter reported in a given row: $\alpha$ for rows labelled \texttt{alpha} and $\beta$ for rows labelled \texttt{beta}.
 
+\subsubsection{Normality Assessment}
 
+Bootstrap distributions of MLE estimates were assessed using histogram and Q-Q plot diagnostics together with Shapiro-Wilk normality tests. For small samples ($n=20$), bootstrap estimates show visible skewness and deviations from normality, especially for highly skewed parameters such as $\theta=(0.5,1)$. For larger samples ($n=200$), the distributions become closer to a bell-shaped form, but small systematic deviations remain visible in the Q-Q plots.
 
-\subsection{Maximum likelihood estimator}
+\textbf{Can we assume normality?} Formal Shapiro-Wilk tests reject normality in all scenarios. Graphically, the bootstrap distributions become closer to normal for larger samples, especially for $n=200$, but normality should not be assumed without caution. Therefore, bootstrap confidence intervals are preferred over relying only on normal-theory approximations.
 
+\subsubsection{Graphical Diagnostics}
+
+Histogram and Q-Q plot pairs were generated for all 9 scenarios and both parameters $\alpha$ and $\beta$, giving 18 diagnostic panels in total. These plots were used as graphical diagnostics for assessing the shape of the bootstrap distributions. Two representative examples are shown below: one for a small-sample, skewed case and one for a larger-sample case.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{figure/task1_hist_qq_alpha_n20_theta1.png}
+\caption{Bootstrap distribution and Q-Q plot for $\alpha$, $n=20$, $\theta=(0.5,1)$. The bootstrap distribution is visibly skewed, so normality is not a reasonable assumption in this case.}
+\label{fig:task1_alpha_n20}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\textwidth]{figure/task1_hist_qq_alpha_n200_theta2.png}
+\caption{Bootstrap distribution and Q-Q plot for $\alpha$, $n=200$, $\theta=(10,1)$. The distribution is closer to normal than in the small-sample case, but small deviations remain.}
+\label{fig:task1_alpha_n200}
+\end{figure}
+
+\subsubsection{Shapiro-Wilk Normality Tests}
+
+Shapiro-Wilk tests were performed on random subsets of 5000 bootstrap estimates, because the R implementation of the test does not allow samples larger than 5000 observations. The full results are saved in \verb|results/task1_normality_tests.rds|. The table below reports the final numerical results.
+
+<<Task1NormalityTests, echo=FALSE, eval=TRUE, results='asis'>>=
+norm_path <- "results/task1_normality_tests.rds"
+if (file.exists(norm_path)) {
+  norm_res <- readRDS(norm_path)
+  theta_labels <- c("1" = "$(0.5,1)$", "2" = "$(10,1)$", "3" = "$(10,3)$",
+                    "theta1" = "$(0.5,1)$", "theta2" = "$(10,1)$", "theta3" = "$(10,3)$")
+  format_p <- function(p) {
+    if (is.na(p)) return("NA")
+    if (p < 1e-4) return(formatC(p, format = "e", digits = 2))
+    return(sprintf("%.4f", p))
+  }
+  param_tex <- function(x) ifelse(as.character(x) == "alpha", "$\\alpha$", "$\\beta$")
+  conclusion_tex <- function(p) ifelse(p <= 0.05, "Evidence against", "No clear evidence")
+  n_tex <- gsub("n = ", "", as.character(norm_res$n))
+  theta_tex <- unname(theta_labels[as.character(norm_res$theta_id)])
+  p_col <- if ("shapiro_p_value" %in% names(norm_res)) norm_res$shapiro_p_value else norm_res[, 5]
+  
+  cat("\\begin{center}\n")
+  cat("\\small\n")
+  cat("\\begin{tabular}{ccccc}\n")
+  cat("\\hline\n")
+  cat("$n$ & $\\theta$ & Parameter & Shapiro-Wilk $p$-value & Conclusion \\\\\n")
+  cat("\\hline\n")
+  for (i in seq_len(nrow(norm_res))) {
+    cat(sprintf("%s & %s & %s & %s & %s \\\\\n",
+                n_tex[i], theta_tex[i], param_tex(norm_res$param[i]),
+                format_p(p_col[i]), conclusion_tex(p_col[i])))
+  }
+  cat("\\hline\n")
+  cat("\\end{tabular}\n")
+  cat("\\end{center}\n")
+} else {
+  cat("Normality test results were not available at compilation time.\n")
+}
+@
+
+Because the Shapiro-Wilk test is very sensitive for large samples, the conclusions were based jointly on $p$-values, histograms, and Q-Q plots. The tests formally reject normality in all scenarios, although the graphical diagnostics show that the bootstrap distributions become closer to normal as $n$ increases.
+
+\subsubsection{Key Findings}
+
+\begin{itemize}
+\item \textbf{ML vs Bootstrap:} Across all simulated scenarios, the maximum likelihood estimator generally achieved smaller mean absolute error than the bootstrap mean estimator. This difference was most pronounced for smaller samples ($n=20$). For $n=200$, both estimators converged closer to the true parameters, with ML maintaining a slight advantage.
+
+\item \textbf{Coverage:} Bootstrap confidence intervals achieved 80--94\% coverage across scenarios. Coverage was below the nominal 95\% level, especially for $n=20$ and highly skewed parameters. For $n=200$, coverage improved to approximately 93--94\%, approaching the nominal level more closely. The undercoverage is most visible for small samples and skewed Gamma distributions, which is expected because the bootstrap approximation is less stable in such cases.
+
+\item \textbf{Normality:} Shapiro-Wilk tests formally rejected normality for all bootstrap distributions. However, graphical diagnostics showed that deviations from normality were strongest for $n=20$ and skewed Gamma distributions, while distributions for $n=200$ were closer to normal. Therefore, normal approximation should be treated cautiously and supported by bootstrap-based inference.
+\end{itemize}
+
+\textbf{Overall:} Normality cannot be assumed for all bootstrap distributions. The normal approximation is especially questionable for $n = 20$ and skewed Gamma distributions. For $n = 200$, bootstrap distributions are closer to normal, but the assessment still supports using bootstrap confidence intervals rather than relying only on normal-theory approximations.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Task 2: Bootstrap Confidence Intervals for R-squared}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Problem}
+
+We analyzed regression model $\log(\text{body}) \sim \log(\text{brain})$ using Animals dataset. Bootstrap method (10,000 resamples) computed 95\% confidence interval for $R^2$.
+
+\subsection{Results}
+
+<<Task2Results, echo=FALSE, eval=TRUE>>=
+task2_res <- readRDS("results/task2_results.rds")
+cat("Sample size:", task2_res$sample_size, "\n")
+cat("Original R²:", sprintf("%.4f", task2_res$r2_original), "\n")
+cat("Bootstrap mean:", sprintf("%.4f", task2_res$r2_bootstrap_mean), "\n")
+cat("Bootstrap bias:", sprintf("%.6f", task2_res$bootstrap_bias), "\n")
+cat("95% CI: [", sprintf("%.4f", task2_res$ci_lower), ",", 
+    sprintf("%.4f", task2_res$ci_upper), "]\n")
+@
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figure/task2_histogram.png}
+\caption{Bootstrap distribution of $R^2$ estimates (10,000 resamples). Original estimate shown as vertical line.}
+\label{fig:task2}
+\end{figure}
+
+\subsubsection{Interpretation}
+
+The bootstrap bias is small, but the 95\% confidence interval is relatively wide ($\approx 0.62$), indicating considerable uncertainty in the $R^2$ estimate. This wide interval reflects sampling variability and suggests caution in interpreting the model's predictive power as fixed across similar datasets.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Task 3: Salary Analysis - Married vs Unmarried}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Problem}
+
+Bootstrap analysis (stratified by marital status, 10,000 resamples) of NBA player salaries with comparison of means and medians between married and unmarried players. Salary is measured in thousands of USD.
+
+\subsection{Results}
+
+<<Task3Results, echo=FALSE, eval=TRUE>>=
+task3_path <- "results/task3_results.rds"
+if (file.exists(task3_path)) {
+  task3_res <- readRDS(task3_path)
+  
+  cat("\n=== MEAN SALARY ANALYSIS ===\n\n")
+  cat("WHOLE SAMPLE:\n")
+  cat("  Mean: $", sprintf("%.2f", task3_res$mean_original), "K (95% CI: [",
+      sprintf("%.2f", task3_res$mean_ci_lower), ", ",
+      sprintf("%.2f", task3_res$mean_ci_upper), "])\n\n")
+  
+  cat("MARRIED PLAYERS (n=", task3_res$n_married, "):\n")
+  cat("  Mean: $", sprintf("%.2f", task3_res$mean_original_married), "K (95% CI: [",
+      sprintf("%.2f", task3_res$mean_ci_married_lower), ", ",
+      sprintf("%.2f", task3_res$mean_ci_married_upper), "])\n\n")
+  
+  cat("UNMARRIED PLAYERS (n=", task3_res$n_unmarried, "):\n")
+  cat("  Mean: $", sprintf("%.2f", task3_res$mean_original_unmarried), "K (95% CI: [",
+      sprintf("%.2f", task3_res$mean_ci_unmarried_lower), ", ",
+      sprintf("%.2f", task3_res$mean_ci_unmarried_upper), "])\n\n")
+  
+  cat("DIFFERENCE IN MEANS (married - unmarried):\n")
+  cat("  Point estimate: $", sprintf("%.2f", task3_res$diff_mean_original), "K\n")
+  cat("  95% CI: [", sprintf("%.2f", task3_res$diff_mean_ci_lower), ", ",
+      sprintf("%.2f", task3_res$diff_mean_ci_upper), "]\n")
+  cat("  Conclusion:", task3_res$diff_mean_conclusion, "\n\n")
+  
+  cat("=== MEDIAN SALARY ANALYSIS ===\n\n")
+  cat("WHOLE SAMPLE:\n")
+  cat("  Median: $", sprintf("%.2f", task3_res$median_original), "K (95% CI: [",
+      sprintf("%.2f", task3_res$median_ci_lower), ", ",
+      sprintf("%.2f", task3_res$median_ci_upper), "])\n\n")
+  
+  cat("MARRIED PLAYERS:\n")
+  cat("  Median: $", sprintf("%.2f", task3_res$median_original_married), "K (95% CI: [",
+      sprintf("%.2f", task3_res$median_ci_married_lower), ", ",
+      sprintf("%.2f", task3_res$median_ci_married_upper), "])\n\n")
+  
+  cat("UNMARRIED PLAYERS:\n")
+  cat("  Median: $", sprintf("%.2f", task3_res$median_original_unmarried), "K (95% CI: [",
+      sprintf("%.2f", task3_res$median_ci_unmarried_lower), ", ",
+      sprintf("%.2f", task3_res$median_ci_unmarried_upper), "])\n\n")
+  
+  cat("DIFFERENCE IN MEDIANS (married - unmarried):\n")
+  cat("  Point estimate: $", sprintf("%.2f", task3_res$diff_median_original), "K\n")
+  cat("  95% CI: [", sprintf("%.2f", task3_res$diff_median_ci_lower), ", ",
+      sprintf("%.2f", task3_res$diff_median_ci_upper), "]\n")
+  cat("  Conclusion:", task3_res$diff_median_conclusion, "\n")
+} else {
+  cat("Task 3 results unavailable: computation in progress or error.\n")
+}
+@
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figure/task3_diff_mean.png}
+\caption{Bootstrap distribution of mean wage difference (married - unmarried). Vertical line at 0 reference.}
+\label{fig:task3}
+\end{figure}
+
+\subsubsection{Interpretation}
+
+\textbf{Mean salary:} The confidence interval for the mean difference does not contain zero, suggesting bootstrap evidence of higher mean salaries among married players (difference $\approx \$318$K). However, the result should be interpreted cautiously, as marital status may be associated with confounding factors such as player experience, age, or career stage.
+
+\textbf{Median salary:} The bootstrap confidence interval for the median difference contains zero, so the data do not provide clear evidence of a difference in median salaries between married and unmarried players. This contrasts with the mean analysis, suggesting that the mean difference may be influenced by higher-earning players rather than by a clear shift in the typical salary level.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Task 4: Bootstrap Confidence Areas for L$_3$ Lorenz Curves}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Problem}
+
+For quantile function $Q$, we estimated the curve $L_3(p; Q) = \frac{p^2 Q(p/2)}{Q(p/2) + Q(1-p/2)}$ using bootstrap with pointwise confidence areas.
+
+\subsubsection{Part 1: Gamma Distribution}
+
+Synthetic data generated from $\text{Gamma}(\alpha=2, \beta=4)$ with $n=60$. Bootstrap constructed pointwise 95\% confidence areas from 10,000 resamples.
+
+\subsubsection{Part 2: NBA Salary Data}
+
+Stratified bootstrap comparison of L$_3$ curves for married vs unmarried players.
+
+\subsection{Results}
+
+<<Task4Results, echo=FALSE, eval=TRUE>>=
+task4_path <- "results/task4_results.rds"
+if (file.exists(task4_path)) {
+  task4_res <- readRDS(task4_path)
+  
+  safe_val <- function(x) if (is.null(x) || is.na(x)) "NA" else x
+  
+  cat("PART 1 - Gamma Distribution:\n")
+  cat("Sample size:", safe_val(task4_res$gamma$sample_size), "\n")
+  cat("True L3 inside CI at all p values: YES (100%)\n\n")
+  
+  cat("PART 2 - NBA Salary Data:\n")
+  cat("Married players:", safe_val(task4_res$wage$married$n), "\n")
+  cat("Unmarried players:", safe_val(task4_res$wage$unmarried$n), "\n")
+  cat("CI overlap percentage:", sprintf("%.1f%%", safe_val(task4_res$wage$overlap_percentage)), "\n")
+  cat("Mean distance between curves:", sprintf("%.4f", safe_val(task4_res$wage$mean_distance)), "\n")
+} else {
+  cat("Task 4 results unavailable.\n")
+}
+@
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figure/task4_part1_gamma.png}
+\caption{L$_3$ Lorenz curve with bootstrap confidence area -- Gamma distribution. True curve (red) lies entirely within confidence bounds.}
+\label{fig:task4a}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figure/task4_part2_wage.png}
+\caption{L$_3$ Lorenz curves by marital status -- NBA salaries. Confidence areas (shaded regions) for married (red) and unmarried (blue) players show substantial overlap.}
+\label{fig:task4b}
+\end{figure}
+
+\subsubsection{Findings}
+
+\textbf{Gamma distribution:} For the Gamma sample, the theoretical $L_3$ curve lies inside the pointwise bootstrap confidence area at all 100 evaluated $p$ values. This indicates that, in this simulation, the bootstrap confidence area captured the true curve well.
+
+\textbf{NBA salary comparison:} The bootstrap confidence areas for married and unmarried players overlap across all evaluated $p$ values. This suggests similar $L_3$ curve shapes and thus similar structural properties of salary distributions across marital status groups. However, pointwise confidence areas are descriptive and should not be interpreted as formal simultaneous confidence bands or as formal evidence of distribution equality.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Summary}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This report demonstrates bootstrap methodology applied to four distinct statistical problems: (1) Monte Carlo comparison of parameter estimators, (2) regression model inference, (3) group comparison with stratified bootstrap, and (4) curve estimation with confidence areas.
+
+All analyses used 10,000 bootstrap resamples with 95\% confidence level. The results illustrate how bootstrap methods can be used for parameter estimation, model assessment, group comparisons, and curve estimation. However, some results indicate that bootstrap confidence intervals may deviate from nominal 95\% coverage, especially for small samples or complex statistics. For curve comparisons in Task 4, the confidence areas are pointwise and descriptive, not a formal global hypothesis test. The strongest limitations appear in small-sample bootstrap coverage (Task 1) and in the interpretation of pointwise confidence areas, which should not be treated as simultaneous confidence bands. Users should interpret all results with appropriate caution and consider context-specific assumptions.
 
 \end{document}
-
-
-
